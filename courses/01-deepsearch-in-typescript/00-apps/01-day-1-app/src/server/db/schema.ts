@@ -136,8 +136,8 @@ export const messages = createTable("message", {
     .$defaultFn(() => crypto.randomUUID()),
   chatId: varchar("chat_id", { length: 255 })
     .notNull()
-    .references(() => chats.id, { onDelete: "cascade" }),
-  role: varchar("role", { length: 32 }).notNull(),
+    .references(() => chats.id),
+  role: varchar("role", { length: 255 }).notNull(),
   parts: json("parts").notNull(),
   order: integer("order").notNull(),
   createdAt: timestamp("created_at", { mode: "date", withTimezone: true })
