@@ -2,30 +2,39 @@
 
 import { useChat } from "@ai-sdk/react";
 import { Loader2 } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { ChatMessage } from "~/components/chat-message";
 import { SignInModal } from "~/components/sign-in-modal";
+import { isNewChatCreated } from "~/utils";
 
 interface ChatProps {
   userName: string;
   isAuthenticated: boolean;
+  chatId: string | undefined;
 }
 
-export const ChatPage = ({ userName, isAuthenticated }: ChatProps) => {
+export const ChatPage = ({ userName, isAuthenticated, chatId }: ChatProps) => {
   const [showSignInModal, setShowSignInModal] = useState(false);
+  const router = useRouter();
+  
   const {
     messages,
     input,
     handleInputChange,
     handleSubmit,
     isLoading,
+    data,
   } = useChat({
+    body: {
+      chatId,
+    },
     onError: (error) => {
       // Check for authentication errors
       if (error.message.includes("401") || 
           error.message.includes("Unauthorized") || 
           error.message.includes("Authentication required") ||
-          (error as any).status === 401) {
+          (error as unknown as Record<string, unknown>).status === 401) {
         setShowSignInModal(true);
       }
     },
@@ -52,6 +61,15 @@ export const ChatPage = ({ userName, isAuthenticated }: ChatProps) => {
       setShowSignInModal(true);
     }
   };
+
+  // Handle redirect when a new chat is created
+  useEffect(() => {
+    const lastDataItem = data?.[data.length - 1];
+
+    if (lastDataItem && isNewChatCreated(lastDataItem)) {
+      router.push(`?id=${lastDataItem.chatId}`);
+    }
+  }, [data, router]);
 
   return (
     <>
