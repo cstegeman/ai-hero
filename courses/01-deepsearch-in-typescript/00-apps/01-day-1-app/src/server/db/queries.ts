@@ -56,7 +56,18 @@ export const getChat = async (opts: { userId: string; chatId: string }) => {
       },
     },
   });
-  return chat;
+
+  if (!chat) {
+    return null;
+  }
+  return {
+    ...chat,
+    messages: chat.messages.map((msg) => ({
+      role: msg.role,
+      content: msg.parts,
+      id: msg.id,
+    })),
+  };
 };
 
 export const getChats = async (opts: { userId: string }) => {

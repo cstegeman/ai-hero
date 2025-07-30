@@ -7,14 +7,16 @@ import { useRouter } from "next/navigation";
 import { ChatMessage } from "~/components/chat-message";
 import { SignInModal } from "~/components/sign-in-modal";
 import { isNewChatCreated } from "~/utils";
+import type { Message } from "ai";
 
 interface ChatProps {
   userName: string;
   isAuthenticated: boolean;
   chatId: string | undefined;
+  initialMessages: Message[];
 }
 
-export const ChatPage = ({ userName, isAuthenticated, chatId }: ChatProps) => {
+export const ChatPage = ({ userName, isAuthenticated, chatId, initialMessages }: ChatProps) => {
   const [showSignInModal, setShowSignInModal] = useState(false);
   const router = useRouter();
   
@@ -26,6 +28,7 @@ export const ChatPage = ({ userName, isAuthenticated, chatId }: ChatProps) => {
     isLoading,
     data,
   } = useChat({
+    initialMessages,
     body: {
       chatId,
     },
