@@ -21,6 +21,10 @@ export default async function HomePage({
     ? await getChats({ userId: session.user.id })
     : [];
 
+  // Generate stable chatId and determine if this is a new chat
+  const chatId = id ?? crypto.randomUUID();
+  const isNewChat = !id;
+
   // Fetch specific chat if id is provided
   let initialMessages: Message[] = [];
   if (id && isAuthenticated && session.user.id) {
@@ -86,9 +90,11 @@ export default async function HomePage({
       </div>
 
       <ChatPage 
+        key={chatId}
         userName={userName} 
         isAuthenticated={isAuthenticated} 
-        chatId={id} 
+        chatId={chatId} 
+        isNewChat={isNewChat}
         initialMessages={initialMessages}
       />
     </div>
