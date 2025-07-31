@@ -26,10 +26,11 @@ export async function POST(request: Request) {
 
   const body = (await request.json()) as {
     messages: Array<Message>;
-    chatId?: string;
+    chatId: string;
+    isNewChat: boolean;
   };
 
-  const { messages, chatId } = body;
+  const { messages, chatId, isNewChat } = body;
 
   if (!messages.length) {
     return new Response("No messages provided", {
@@ -37,22 +38,19 @@ export async function POST(request: Request) {
     });
   }
 
-  // Create a new chat if chatId is not provided
-  let currentChatId = chatId;
-  if (!currentChatId) {
-    currentChatId = crypto.randomUUID();
-
+  // Handle chat creation and validation based on isNewChat flag
+  if (isNewChat) {
     // Create the chat with just the user's message
     await upsertChat({
       userId: session.user.id,
-      chatId: currentChatId,
+      chatId: chatId,
       title: messages[messages.length - 1]!.content.slice(0, 50) + "...",
       messages: messages,
     });
   } else {
     // Check if the chat belongs to the user
     const existingChat = await db.query.chats.findFirst({
-      where: eq(chats.id, currentChatId),
+      where: eq(chats.id, chatId),
     });
 
     if (!existingChat || existingChat.userId !== session.user.id) {
@@ -65,10 +63,10 @@ export async function POST(request: Request) {
   return createDataStreamResponse({
     execute: async (dataStream) => {
       // Send the new chat ID if we just created one
-      if (!chatId) {
+      if (isNewChat) {
         dataStream.writeData({
           type: "NEW_CHAT_CREATED",
-          chatId: currentChatId,
+          chatId: chatId,
         });
       }
 
@@ -145,7 +143,7 @@ Always strive to give the most current and accurate information possible by leve
 
           upsertChat({
             userId: session.user.id,
-            chatId: currentChatId!,
+            chatId: chatId,
             title: lastMessage.content.slice(0, 50) + "...",
             messages: updatedMessages,
           });
