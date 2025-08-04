@@ -74,6 +74,7 @@ export async function POST(request: Request) {
         model,
         messages,
         maxSteps: 10,
+        experimental_telemetry: { isEnabled: true },
         system: `You are a helpful AI assistant with access to web search capabilities. 
         
 When answering questions, you should:
