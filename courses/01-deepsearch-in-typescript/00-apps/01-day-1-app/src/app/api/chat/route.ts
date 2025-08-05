@@ -12,6 +12,12 @@ import { upsertChat } from "~/server/db/queries";
 import { db } from "~/server/db";
 import { eq } from "drizzle-orm";
 import { chats } from "~/server/db/schema";
+import { Langfuse } from "langfuse";
+import { env } from "~/env";
+
+const langfuse = new Langfuse({
+  environment: env.NODE_ENV,
+});
 
 export const maxDuration = 60;
 
@@ -39,6 +45,8 @@ export async function POST(request: Request) {
   }
 
   // Handle chat creation and validation based on isNewChat flag
+  let currentChatId = chatId;
+
   if (isNewChat) {
     // Create the chat with just the user's message
     await upsertChat({
@@ -60,6 +68,13 @@ export async function POST(request: Request) {
     }
   }
 
+  // Create Langfuse trace with user and session tracking
+  const trace = langfuse.trace({
+    sessionId: currentChatId,
+    name: "chat",
+    userId: session.user.id,
+  });
+
   return createDataStreamResponse({
     execute: async (dataStream) => {
       // Send the new chat ID if we just created one
@@ -74,7 +89,13 @@ export async function POST(request: Request) {
         model,
         messages,
         maxSteps: 10,
-        experimental_telemetry: { isEnabled: true },
+        experimental_telemetry: {
+          isEnabled: true,
+          functionId: "agent",
+          metadata: {
+            langfuseTraceId: trace.id,
+          },
+        },
         system: `You are a helpful AI assistant with access to web search capabilities. 
         
 When answering questions, you should:
@@ -131,7 +152,7 @@ Always strive to give the most current and accurate information possible by leve
             },
           },
         },
-        onFinish: ({ text, finishReason, usage, response }) => {
+        onFinish: async ({ text, finishReason, usage, response }) => {
           const updatedMessages = appendResponseMessages({
             messages, // from the POST body
             responseMessages: response.messages,
@@ -148,6 +169,9 @@ Always strive to give the most current and accurate information possible by leve
             title: lastMessage.content.slice(0, 50) + "...",
             messages: updatedMessages,
           });
+
+          // Flush the trace to Langfuse
+          await langfuse.flushAsync();
         },
       });
 
