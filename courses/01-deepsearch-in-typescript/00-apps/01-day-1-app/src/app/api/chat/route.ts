@@ -8,6 +8,7 @@ import { z } from "zod";
 import { model } from "~/model";
 import { auth } from "~/server/auth";
 import { searchBrave } from "~/brave";
+import { bulkCrawlWebsites, type CrawlErrorResponse } from "~/scraper";
 import { upsertChat } from "~/server/db/queries";
 import { db } from "~/server/db";
 import { eq } from "drizzle-orm";
@@ -45,7 +46,7 @@ export async function POST(request: Request) {
   }
 
   // Handle chat creation and validation based on isNewChat flag
-  let currentChatId = chatId;
+  const currentChatId = chatId;
 
   if (isNewChat) {
     // Create the chat with just the user's message
@@ -96,16 +97,31 @@ export async function POST(request: Request) {
             langfuseTraceId: trace.id,
           },
         },
-        system: `You are a helpful AI assistant with access to web search capabilities. 
-        
-When answering questions, you should:
-1. Always attempt to search the web for current, relevant information to provide accurate and up-to-date answers
-2. Use the search tool to find information before responding
-3. Cite your sources with inline links in your responses
-4. If you find relevant information, incorporate it into your answer with proper attribution
-5. Provide comprehensive answers that combine search results with your knowledge
+        system: `You are a helpful AI assistant with access to web search and web scraping capabilities. When answering questions:
 
-Always strive to give the most current and accurate information possible by leveraging web search.`,
+1. Always search the web for up-to-date information when relevant
+2. ALWAYS format URLs as markdown links using the format [title](url)
+3. Be thorough but concise in your responses
+4. If you're unsure about something, search the web to verify
+5. When providing information, always include the source where you found it using markdown links
+6. Never include raw URLs - always use markdown link format
+7. When users ask up-to-date information, use the current date to provide context in search snippets
+8. IMPORTANT: After finding relevant URLs from search results, ALWAYS use the scrapePages tool 
+to get the full content of those pages. Never rely solely on search snippets.
+
+Your workflow should be:
+1. Use searchWeb to find 10 relevant URLs from diverse sources (news sites, blogs, official documentation, etc.)
+2. Select 4-6 of the most relevant and diverse URLs to scrape
+3. Use scrapePages to get the full content of those URLs
+4. Use the full content to provide detailed, accurate answers
+
+Remember to:
+- Always scrape multiple sources (4-6 URLs) for each query
+- Choose diverse sources (e.g., not just news sites or just blogs)
+- Prioritize official sources and authoritative websites
+- Use the full content to provide comprehensive answers
+
+Remember to use both tools in combination - searchWeb to find relevant pages, and scrapePages to get their full content from diverse sources.`,
         tools: {
           searchWeb: {
             description: "Search the web for current information",
@@ -151,8 +167,35 @@ Always strive to give the most current and accurate information possible by leve
               }
             },
           },
+          scrapePages: {
+            parameters: z.object({
+              urls: z.array(z.string()).describe("The URLs to scrape"),
+            }),
+            execute: async ({ urls }, { abortSignal }) => {
+              const results = await bulkCrawlWebsites({ urls });
+
+              if (!results.success) {
+                return {
+                  error: results.error,
+                  results: results.results.map(({ url, result }) => ({
+                    url,
+                    success: result.success,
+                    data: result.success ? result.data : result.error,
+                  })),
+                };
+              }
+
+              return {
+                results: results.results.map(({ url, result }) => ({
+                  url,
+                  success: result.success,
+                  data: result.data,
+                })),
+              };
+            },
+          },
         },
-        onFinish: async ({ text, finishReason, usage, response }) => {
+        onFinish: async ({ response }) => {
           const updatedMessages = appendResponseMessages({
             messages, // from the POST body
             responseMessages: response.messages,
