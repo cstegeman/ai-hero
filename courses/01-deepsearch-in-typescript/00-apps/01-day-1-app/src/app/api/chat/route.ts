@@ -97,7 +97,11 @@ export async function POST(request: Request) {
             langfuseTraceId: trace.id,
           },
         },
-        system: `You are a helpful AI assistant with access to web search and web scraping capabilities. When answering questions:
+        system: `You are a helpful AI assistant with access to web search and web scraping capabilities. 
+
+CURRENT DATE AND TIME: ${new Date().toISOString()}
+
+When answering questions:
 
 1. Always search the web for up-to-date information when relevant
 2. ALWAYS format URLs as markdown links using the format [title](url)
@@ -105,7 +109,7 @@ export async function POST(request: Request) {
 4. If you're unsure about something, search the web to verify
 5. When providing information, always include the source where you found it using markdown links
 6. Never include raw URLs - always use markdown link format
-7. When users ask up-to-date information, use the current date to provide context in search snippets
+7. When users ask for up-to-date information, use the current date (${new Date().toISOString()}) to provide context and help determine if information is recent
 8. IMPORTANT: After finding relevant URLs from search results, ALWAYS use the scrapePages tool 
 to get the full content of those pages. Never rely solely on search snippets.
 
@@ -120,6 +124,8 @@ Remember to:
 - Choose diverse sources (e.g., not just news sites or just blogs)
 - Prioritize official sources and authoritative websites
 - Use the full content to provide comprehensive answers
+- When users ask for current information (weather, sports scores, news, etc.), emphasize that you have access to the current date and can help determine if information is up-to-date
+- Pay attention to the date field in search results to determine how recent the information is
 
 Remember to use both tools in combination - searchWeb to find relevant pages, and scrapePages to get their full content from diverse sources.`,
         tools: {
@@ -135,7 +141,7 @@ Remember to use both tools in combination - searchWeb to find relevant pages, an
                   abortSignal,
                 );
 
-                // Handle the actual Brave Search API response structure
+                // Handle the Brave Search API response structure
                 const organicResults = results.web?.results || [];
 
                 if (organicResults.length === 0) {
@@ -152,6 +158,7 @@ Remember to use both tools in combination - searchWeb to find relevant pages, an
                   title: result.title,
                   link: result.url,
                   snippet: result.description || "",
+                  date: result.date || "",
                 }));
               } catch (error) {
                 console.error("Search error:", error);

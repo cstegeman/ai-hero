@@ -11,6 +11,7 @@ export declare namespace BraveTool {
     title: string;
     url: string;
     description: string;
+    date?: string;
   }
 
   export interface SearchResult {
