@@ -45,35 +45,77 @@ export async function POST(request: Request) {
     });
   }
 
+  // Create Langfuse trace early - we'll update the sessionId later
+  const trace = langfuse.trace({
+    name: "chat",
+    userId: session.user.id,
+  });
+
   // Handle chat creation and validation based on isNewChat flag
   const currentChatId = chatId;
 
   if (isNewChat) {
     // Create the chat with just the user's message
+    const createChatSpan = trace.span({
+      name: "create-new-chat",
+      input: {
+        userId: session.user.id,
+        title: messages[messages.length - 1]!.content.slice(0, 50) + "...",
+        messages,
+      },
+    });
+
     await upsertChat({
       userId: session.user.id,
       chatId: chatId,
       title: messages[messages.length - 1]!.content.slice(0, 50) + "...",
       messages: messages,
     });
+
+    createChatSpan.end({
+      output: {
+        chatId: chatId,
+      },
+    });
   } else {
     // Check if the chat belongs to the user
+    const validateChatSpan = trace.span({
+      name: "validate-chat-ownership",
+      input: {
+        chatId: chatId,
+        userId: session.user.id,
+      },
+    });
+
     const existingChat = await db.query.chats.findFirst({
       where: eq(chats.id, chatId),
     });
 
     if (!existingChat || existingChat.userId !== session.user.id) {
+      validateChatSpan.end({
+        output: {
+          chatExists: !!existingChat,
+          chatUserId: existingChat?.userId,
+        },
+      });
+
       return new Response("Chat not found", {
         status: 404,
       });
     }
+
+    validateChatSpan.end({
+      output: {
+        success: true,
+        chatId: existingChat.id,
+        chatTitle: existingChat.title,
+      },
+    });
   }
 
-  // Create Langfuse trace with user and session tracking
-  const trace = langfuse.trace({
+  // Update the trace with the sessionId now that we have the chatId
+  trace.update({
     sessionId: currentChatId,
-    name: "chat",
-    userId: session.user.id,
   });
 
   return createDataStreamResponse({
@@ -213,11 +255,29 @@ Remember to use both tools in combination - searchWeb to find relevant pages, an
             return;
           }
 
-          upsertChat({
+          const updateChatSpan = trace.span({
+            name: "update-chat",
+            input: {
+              userId: session.user.id,
+              chatId: chatId,
+              title: lastMessage.content.slice(0, 50) + "...",
+              messageCount: updatedMessages.length,
+            },
+          });
+
+          await upsertChat({
             userId: session.user.id,
             chatId: chatId,
             title: lastMessage.content.slice(0, 50) + "...",
             messages: updatedMessages,
+          });
+
+          updateChatSpan.end({
+            output: {
+              success: true,
+              chatId: chatId,
+              updatedMessageCount: updatedMessages.length,
+            },
           });
 
           // Flush the trace to Langfuse
