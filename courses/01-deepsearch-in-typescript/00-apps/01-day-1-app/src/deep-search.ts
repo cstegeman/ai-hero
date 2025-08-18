@@ -1,8 +1,8 @@
 import { streamText, type Message, type TelemetrySettings } from "ai";
 import { z } from "zod";
 import { model } from "./model";
-import { searchBrave } from "./brave";
-import { bulkCrawlWebsites } from "./scraper";
+import { searchWeb, type SearchTool } from "./search";
+import { bulkCrawlWebsites, type BulkCrawlResponse } from "./scraper";
 
 export const streamFromDeepSearch = (opts: {
   messages: Message[];
@@ -53,13 +53,10 @@ Remember to use both tools in combination - searchWeb to find relevant pages, an
         }),
         execute: async ({ query }, { abortSignal }) => {
           try {
-            const results = await searchBrave(
-              { q: query, num: 10 },
-              abortSignal,
-            );
+            const results = await searchWeb({ q: query, num: 10 }, abortSignal);
 
-            // Handle the Brave Search API response structure
-            const organicResults = results.web?.results || [];
+            // Handle the Serper Search API response structure (transformed to match Brave format)
+            const organicResults = results.web?.results ?? [];
 
             if (organicResults.length === 0) {
               return [
@@ -74,8 +71,8 @@ Remember to use both tools in combination - searchWeb to find relevant pages, an
             return organicResults.map((result) => ({
               title: result.title,
               link: result.url,
-              snippet: result.description || "",
-              date: result.date || "",
+              snippet: result.description ?? "",
+              date: result.date ?? "",
             }));
           } catch (error) {
             console.error("Search error:", error);
@@ -95,12 +92,12 @@ Remember to use both tools in combination - searchWeb to find relevant pages, an
         parameters: z.object({
           urls: z.array(z.string()).describe("The URLs to scrape"),
         }),
-        execute: async ({ urls }, { abortSignal }) => {
+        execute: async ({ urls }, { abortSignal: _abortSignal }) => {
           const results = await bulkCrawlWebsites({ urls });
 
           if (!results.success) {
             return {
-              error: (results as any).error,
+              error: (results as { error: string }).error,
               results: results.results.map(({ url, result }) => ({
                 url,
                 success: result.success,
