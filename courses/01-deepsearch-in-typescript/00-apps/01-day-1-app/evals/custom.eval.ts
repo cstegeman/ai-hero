@@ -2,79 +2,25 @@ import { evalite } from "evalite";
 import { askDeepSearch } from "../src/deep-search";
 import type { Message } from "ai";
 import { Factuality } from "../src/factuality-scorer";
+import { devData } from "./dev";
+import { ciData } from "./ci";
+import { regressionData } from "./regression";
+import { env } from "../src/env";
+
+// Select data based on environment variable
+let data = devData;
+
+// If CI, add the CI data
+if (env.EVAL_DATASET === "ci") {
+  data = [...data, ...ciData];
+  // If Regression, add the regression data AND the CI data
+} else if (env.EVAL_DATASET === "regression") {
+  data = [...data, ...ciData, ...regressionData];
+}
 
 evalite("Custom Eval", {
   data: async (): Promise<{ input: Message[]; expected: string }[]> => {
-    return [
-      // Simple questions
-      {
-        input: [
-          {
-            id: "1",
-            role: "user",
-            content: "What is the most recent release of home assistant?",
-          },
-        ],
-        expected: "The most recent version of home assistant is 2025.8",
-      },
-      {
-        input: [
-          {
-            id: "2",
-            role: "user",
-            content: "What device did home assistant launch in August 2025?",
-          },
-        ],
-        expected: "Home Assistant Connect ZWA-2",
-      },
-      {
-        input: [
-          {
-            id: "3",
-            role: "user",
-            content:
-              "What is the main reason smart home enhusiasts go for Home Assistant?",
-          },
-        ],
-        expected:
-          "Home Assistant is a popular choice for smart home enthusiasts because it is open source, runs fully local and is customizable.",
-      },
-      // Complex questions
-      {
-        input: [
-          {
-            id: "4",
-            role: "user",
-            content: `Does running "pnpm update --interactive --latest" also try to update dependencies in my app folder? It's included in the pnpm-workspace.yaml file`,
-          },
-        ],
-        expected:
-          "No it does not, you need to add the -r flag to update dependencies other than the root level.",
-      },
-      {
-        input: [
-          {
-            id: "5",
-            role: "user",
-            content:
-              "How can I properly setup commit hooks in my monorepo using pnpm and turborepo?",
-          },
-        ],
-        expected:
-          "Use husky for commit hooks, lint-staged for checking which files are changed  and use turborepo for running commands in the monorepo.",
-      },
-      {
-        input: [
-          {
-            id: "6",
-            role: "user",
-            content: "How do you do a 404 page in TanStack Start?",
-          },
-        ],
-        expected:
-          "notFound Function and notFoundComponent API: This is the newer, recommended way to handle 'not found' errors in TanStack Router.",
-      },
-    ];
+    return data;
   },
   task: async (input) => {
     return askDeepSearch(input);
